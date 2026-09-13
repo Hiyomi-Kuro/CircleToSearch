@@ -48,8 +48,6 @@ enum class ActionType {
     OPEN_NOTIFICATIONS,
     OPEN_QUICK_SETTINGS,
     CTS_AUTO,
-    CTS_LENS,
-    CTS_MULTI,
     SPLIT_SCREEN,
     OPEN_APP,
     SCROLL_TOP,
@@ -72,8 +70,6 @@ fun ActionType.getFriendlyName(context: Context): String = when (this) {
     ActionType.OPEN_NOTIFICATIONS -> context.getString(R.string.action_open_notifications)
     ActionType.OPEN_QUICK_SETTINGS -> context.getString(R.string.action_quick_settings)
     ActionType.CTS_AUTO -> context.getString(R.string.action_cts_auto)
-    ActionType.CTS_LENS -> context.getString(R.string.action_cts_lens)
-    ActionType.CTS_MULTI -> context.getString(R.string.action_cts_multi)
     ActionType.SPLIT_SCREEN -> context.getString(R.string.action_split_screen)
     ActionType.OPEN_APP -> context.getString(R.string.action_open_app)
     ActionType.SCROLL_TOP -> context.getString(R.string.action_scroll_top)

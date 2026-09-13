@@ -25,14 +25,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import com.kaori.circletosearch.R
 import com.kaori.circletosearch.data.BitmapRepository
-import com.kaori.circletosearch.ocr.TesseractEngine
+import com.kaori.circletosearch.ocr.ChineseEnglishTextRecognizer
 import com.kaori.circletosearch.utils.ImageUtils
 import kotlinx.coroutines.*
 import java.util.UUID
@@ -148,22 +147,11 @@ class CopyTextOverlayManager(
 
     @Composable
     private fun TopBarUI(onClose: () -> Unit) {
-        val filePickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-            contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
-        ) { uri: android.net.Uri? ->
-            if (uri != null) {
-                TesseractEngine.importModel(context, uri) { success, msg ->
-                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
                 .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(
@@ -172,67 +160,14 @@ class CopyTextOverlayManager(
                     .background(ComposeColor.Black.copy(alpha = 0.35f), CircleShape)
                     .size(40.dp)
             ) {
-                Icon(Icons.Default.Close, contentDescription = context.getString(R.string.cd_exit_copy_mode), tint = ComposeColor.White)
-            }
-            
-            Spacer(modifier = Modifier.weight(1f))
-
-            Box {
-                var showMenu by remember { mutableStateOf(false) }
-                IconButton(
-                    onClick = { showMenu = true },
-                    modifier = Modifier
-                        .background(ComposeColor.Black.copy(alpha = 0.35f), CircleShape)
-                        .size(40.dp)
-                ) {
-                    Icon(Icons.Default.MoreVert, contentDescription = context.getString(R.string.cd_menu), tint = ComposeColor.White)
-                }
-
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false },
-                    shape = RoundedCornerShape(28.dp),
-                    tonalElevation = 6.dp
-                ) {
-                    DropdownMenuItem(
-                        text = { Text(context.getString(R.string.menu_select_language_model)) },
-                        onClick = {
-                            showMenu = false
-                            showLanguageModelSelector()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(context.getString(R.string.menu_import_model)) },
-                        onClick = {
-                            showMenu = false
-                            filePickerLauncher.launch("*/*")
-                        }
-                    )
-                }
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = context.getString(R.string.cd_exit_copy_mode),
+                    tint = ComposeColor.White
+                )
             }
         }
     }
-
-    private fun Int.toComposeColor(): ComposeColor = ComposeColor(this)
-
-    private fun showLanguageModelSelector() {
-        val models = TesseractEngine.getAvailableModels(context)
-        val prefs = context.getSharedPreferences("OcrSettings", Context.MODE_PRIVATE)
-        val current = prefs.getString("selected_lang", "eng") ?: "eng"
-        
-        android.app.AlertDialog.Builder(context)
-            .setTitle(context.getString(R.string.title_select_ocr_model))
-            .setSingleChoiceItems(models.toTypedArray(), models.indexOf(current)) { dialog, which ->
-                val selected = models[which]
-                prefs.edit().putString("selected_lang", selected).apply()
-                Toast.makeText(context, context.getString(R.string.toast_ocr_model_selected, selected.uppercase()), Toast.LENGTH_SHORT).show()
-                dialog.dismiss()
-                rescanNodes()
-            }
-            .setNegativeButton(context.getString(R.string.cancel), null)
-            .show()
-    }
-
     fun dismiss() {
         scanJob?.cancel()
         dimView = null
@@ -259,7 +194,7 @@ class CopyTextOverlayManager(
 
             try {
                 // OCR scan runs on background thread
-                val ocrNodes = TesseractEngine.extractText(context, bitmap)
+                val ocrNodes = ChineseEnglishTextRecognizer.extractText(bitmap)
                 
                 val sortedNodes = ocrNodes.sortedWith(compareBy({ it.bounds.top }, { it.bounds.left }))
                 textNodes.clear()

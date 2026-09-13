@@ -75,20 +75,9 @@ class CircleToSearchAccessibilityService : AccessibilityService() {
     
     /** Kept by companion so scroll events can re-scan copy-text nodes. */
     internal var copyTextManager: CopyTextOverlayManager? = null
+
+    private val overlayPrefs by lazy { getSharedPreferences("overlay_prefs", Context.MODE_PRIVATE) }
     
-    // Bubble related - Keeping existing logic but refactoring slightly if needed
-    // For now, keeping bubble separate as requested in prompt "statusbar overlay customization... but it should work normally like now"
-    // The prompt asks to disable statusbar overlay in landscape but keep it working normally.
-    
-    private var bubbleView: View? = null
-    private val prefs by lazy { getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
-    private val overlayPrefs by lazy { getSharedPreferences("overlay_prefs", Context.MODE_PRIVATE) } // Watch overlay prefs too
-    
-    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == "bubble_enabled") {
-            updateBubbleState()
-        }
-    }
     
     private val overlayPrefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
         // On any overlay config change, rebuild the overlay
@@ -109,10 +98,8 @@ class CircleToSearchAccessibilityService : AccessibilityService() {
             android.accessibilityservice.AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
         serviceInfo = info
         
-        prefs.registerOnSharedPreferenceChangeListener(prefsListener)
         overlayPrefs.registerOnSharedPreferenceChangeListener(overlayPrefsListener)
         
-        updateBubbleState()
         updateOverlay()
     }
     
@@ -121,81 +108,6 @@ class CircleToSearchAccessibilityService : AccessibilityService() {
         updateOverlay()
     }
 
-    private fun updateBubbleState() {
-        if (prefs.getBoolean("bubble_enabled", false)) {
-            showBubble()
-        } else {
-            hideBubble()
-        }
-    }
-
-    private fun showBubble() {
-        if (bubbleView != null) return // Already shown
-
-        val params = WindowManager.LayoutParams(
-            100, 100,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        )
-        params.gravity = Gravity.TOP or Gravity.START
-        params.x = 0
-        params.y = 200
-
-        bubbleView = View(this).apply {
-            setBackgroundResource(R.mipmap.ic_launcher)
-            elevation = 10f
-            
-            var initialX = 0
-            var initialY = 0
-            var initialTouchX = 0f
-            var initialTouchY = 0f
-            
-            @SuppressLint("ClickableViewAccessibility")
-            setOnTouchListener { _, event ->
-                when (event.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        initialX = params.x
-                        initialY = params.y
-                        initialTouchX = event.rawX
-                        initialTouchY = event.rawY
-                        true
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        params.x = initialX + (event.rawX - initialTouchX).toInt()
-                        params.y = initialY + (event.rawY - initialTouchY).toInt()
-                        windowManager?.updateViewLayout(this, params)
-                        true
-                    }
-                    MotionEvent.ACTION_UP -> {
-                        if (Math.abs(event.rawX - initialTouchX) < 10 && Math.abs(event.rawY - initialTouchY) < 10) {
-                            performCapture()
-                        }
-                        true
-                    }
-                    else -> false
-                }
-            }
-        }
-
-        try {
-            windowManager?.addView(bubbleView, params)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    private fun hideBubble() {
-        if (bubbleView != null) {
-            try {
-                windowManager?.removeView(bubbleView)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-            bubbleView = null
-        }
-    }
 
     private fun updateOverlay() {
         val config = configManager.getConfig()
@@ -511,15 +423,7 @@ class CircleToSearchAccessibilityService : AccessibilityService() {
             }
             ActionType.CTS_AUTO -> {
                  // Respect Global Preference
-                 performCapture(null)
-            }
-            ActionType.CTS_LENS -> {
-                 // Force Lens Mode for this session only
-                 performCapture(true)
-            }
-            ActionType.CTS_MULTI -> {
-                 // Force Multi Mode for this session only
-                 performCapture(false)
+                 performCapture()
             }
             ActionType.SPLIT_SCREEN -> {
                  val success = performGlobalAction(GLOBAL_ACTION_TOGGLE_SPLIT_SCREEN)
@@ -685,7 +589,7 @@ class CircleToSearchAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun performCapture(searchModeOverride: Boolean? = null) {
+    private fun performCapture() {
         android.util.Log.d("CircleToSearch", "performCapture called. hasWindowManager=${windowManager != null}")
         
         // Clear repository at the source to prevent any "ghost" flash of old data
@@ -719,7 +623,7 @@ class CircleToSearchAccessibilityService : AccessibilityService() {
                             BitmapRepository.setScreenshot(copy)
                             
                             // Launch Overlay Immediately
-                            launchOverlay(searchModeOverride)
+                            launchOverlay()
                             
                         } catch (e: Exception) {
                             e.printStackTrace()
@@ -734,12 +638,11 @@ class CircleToSearchAccessibilityService : AccessibilityService() {
         }
     }
 
-    fun launchOverlay(searchModeOverride: Boolean? = null) {
+    fun launchOverlay() {
         android.util.Log.d("CircleToSearchAccess", "AccessibilityService launching OverlayActivity")
         val intent = Intent(this, OverlayActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION) // Disable animation for faster feel
-            searchModeOverride?.let { putExtra("EXTRA_SEARCH_MODE_OVERRIDE", it) }
         }
         startActivity(intent)
     }
@@ -1175,7 +1078,7 @@ class CircleToSearchAccessibilityService : AccessibilityService() {
 
         fun triggerCapture() {
             android.util.Log.d("CircleToSearch", "triggerCapture static called. instance=${instance != null}")
-            instance?.performCapture(null)
+            instance?.performCapture()
         }
 
         fun pinArea(bitmap: Bitmap, rect: android.graphics.Rect): Boolean {
@@ -1189,24 +1092,18 @@ class CircleToSearchAccessibilityService : AccessibilityService() {
     override fun onCreate() {
         super.onCreate()
         instance = this
-        // configManager init moved to onServiceConnected or safe lazy? 
-        // WindowManager is needed for views which happens in onServiceConnected mostly.
     }
 
     override fun onDestroy() {
         super.onDestroy()
         instance = null
-        prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
         overlayPrefs.unregisterOnSharedPreferenceChangeListener(overlayPrefsListener)
-        
         overlayViews.forEach { view ->
-             try {
+            try {
                 windowManager?.removeView(view)
-            } catch (e: Exception) {
-                e.printStackTrace()
+            } catch (_: Exception) {
             }
         }
-        hideBubble()
+        overlayViews.clear()
     }
 }
-

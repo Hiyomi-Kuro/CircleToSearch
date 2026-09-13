@@ -15,25 +15,37 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import java.util.Locale
 
 object AppLanguage {
     private const val PREFERENCES_NAME = "app_language"
     private const val LANGUAGE_KEY = "selected_language"
+    private const val LANGUAGE_MIGRATION_KEY = "language_migration_version"
+    private const val CURRENT_LANGUAGE_MIGRATION = 1
+
     const val ENGLISH = "en"
     const val SIMPLIFIED_CHINESE = "zh-CN"
 
-    fun current(context: Context): String = context
-        .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-        .getString(LANGUAGE_KEY, ENGLISH) ?: ENGLISH
+    fun current(context: Context): String {
+        val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+        if (preferences.getInt(LANGUAGE_MIGRATION_KEY, 0) < CURRENT_LANGUAGE_MIGRATION) {
+            preferences.edit()
+                .putString(LANGUAGE_KEY, SIMPLIFIED_CHINESE)
+                .putInt(LANGUAGE_MIGRATION_KEY, CURRENT_LANGUAGE_MIGRATION)
+                .commit()
+            return SIMPLIFIED_CHINESE
+        }
+        return preferences.getString(LANGUAGE_KEY, SIMPLIFIED_CHINESE) ?: SIMPLIFIED_CHINESE
+    }
 
     fun set(context: Context, languageTag: String) {
         context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(LANGUAGE_KEY, languageTag)
+            .putInt(LANGUAGE_MIGRATION_KEY, CURRENT_LANGUAGE_MIGRATION)
             .apply()
     }
 

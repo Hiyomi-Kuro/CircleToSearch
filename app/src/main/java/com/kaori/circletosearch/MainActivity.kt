@@ -55,7 +55,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import com.kaori.circletosearch.ui.theme.CircleToSearchTheme
 import com.kaori.circletosearch.ui.components.AccessibilityDisclosureDialog
-import com.kaori.circletosearch.ui.components.UnifiedSearchMethodSelector
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -76,10 +75,8 @@ class MainActivity : ComponentActivity() {
                     androidx.compose.animation.Crossfade(targetState = currentScreen) { screen ->
                         when (screen) {
                             "settings" -> com.kaori.circletosearch.ui.OverlaySettingsScreen(onBack = { currentScreen = "home" })
-                            "ocr_settings" -> com.kaori.circletosearch.ui.OcrSettingsScreen(onBack = { currentScreen = "home" })
                             else -> SetupScreen(
-                                onSettingsClick = { currentScreen = "settings" },
-                                onOcrSettingsClick = { currentScreen = "ocr_settings" }
+                                onSettingsClick = { currentScreen = "settings" }
                             )
                         }
                     }
@@ -91,7 +88,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SetupScreen(onSettingsClick: () -> Unit, onOcrSettingsClick: () -> Unit) {
+fun SetupScreen(onSettingsClick: () -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     
@@ -128,21 +125,21 @@ fun SetupScreen(onSettingsClick: () -> Unit, onOcrSettingsClick: () -> Unit) {
             Spacer(modifier = Modifier.height(32.dp))
             
             // 1. Header
-            Box(
-                modifier = Modifier.fillMaxWidth()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = stringResource(R.string.header_title),
-                    style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.align(Alignment.Center)
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
-                LanguageSwitcher(modifier = Modifier.align(Alignment.CenterStart))
-                IconButton(
-                    onClick = onSettingsClick,
-                    modifier = Modifier.align(Alignment.CenterEnd)
-                ) {
-                     Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.cd_overlay_settings), tint = MaterialTheme.colorScheme.primary)
+                LanguageSwitcher()
+                IconButton(onClick = onSettingsClick) {
+                    Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.cd_overlay_settings), tint = MaterialTheme.colorScheme.primary)
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -311,71 +308,8 @@ fun SetupScreen(onSettingsClick: () -> Unit, onOcrSettingsClick: () -> Unit) {
                         }
                     }
                 }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // 4. Settings (Bubble)
-            Text(
-                text = stringResource(R.string.section_customization),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.align(Alignment.Start)
-            )
-            BubbleSwitch(context)
-            
-            val uiPreferences = remember { com.kaori.circletosearch.utils.UIPreferences(context) }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp)
-                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                    .padding(16.dp)
-            ) {
-                UnifiedSearchMethodSelector(
-                    uiPreferences = uiPreferences
-                )
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = androidx.compose.material.icons.Icons.Default.Info,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = stringResource(R.string.info_lens_needs_google),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
-            }
-            
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.label_ocr_settings)) },
-                supportingContent = { Text(stringResource(R.string.label_ocr_settings_subtitle)) },
-                trailingContent = { Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                modifier = Modifier.clickable(onClick = onOcrSettingsClick),
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-            )
-//            Spacer(modifier = Modifier.height(25.dp))
-//
-//            // Privacy Note
-//            Text(
-//                text = "That’s it. No more permissions.\n We’re not trying to adopt your phone.",
-//                style = MaterialTheme.typography.bodySmall,
-//                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-//                textAlign = TextAlign.Center
-//            )
-
-            Spacer(modifier = Modifier.height(22.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
 
         }
@@ -433,29 +367,5 @@ fun isDefaultAssistant(context: android.content.Context): Boolean {
     
     // Check if our VoiceInteractionService is the one currently set as default
     return assistant == myComponentString
-}
-
-
-@Composable
-fun BubbleSwitch(context: android.content.Context) {
-    val prefs = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
-    val isBubbleEnabled = remember { mutableStateOf(prefs.getBoolean("bubble_enabled", false)) }
-
-    ListItem(
-        headlineContent = { Text(stringResource(R.string.label_floating_bubble)) },
-        supportingContent = { Text(stringResource(R.string.label_floating_bubble_subtitle)) },
-        trailingContent = {
-            Switch(
-                checked = isBubbleEnabled.value,
-                onCheckedChange = { enabled ->
-                    isBubbleEnabled.value = enabled
-                    prefs.edit().putBoolean("bubble_enabled", enabled).apply()
-                }
-            )
-        },
-        colors = ListItemDefaults.colors(
-            containerColor = Color.Transparent
-        )
-    )
 }
 
